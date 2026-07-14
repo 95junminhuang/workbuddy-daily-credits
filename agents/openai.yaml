@@ -1,0 +1,4 @@
+interface:
+  display_name: "WorkBuddy 每日积分"
+  short_description: "Claim WorkBuddy daily credits with zero model calls"
+  default_prompt: "Use $workbuddy-daily-credits to claim today’s WorkBuddy credits."
