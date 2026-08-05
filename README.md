@@ -10,7 +10,7 @@
 - 先查询状态，只有尚未领取时才提交
 - 重复执行安全，已领取会返回 `ALREADY_CLAIMED`
 - 只使用 Python 标准库，无需安装依赖
-- macOS LaunchAgent 定时执行，WorkBuddy 窗口无需保持打开
+- 独立的 macOS LaunchAgent 定时执行，WorkBuddy 窗口无需保持打开
 - 不复制、不保存、不打印 access token
 
 ## 要求
@@ -20,23 +20,23 @@
 - WorkBuddy 已在本机登录且会话仍有效
 - 当前存在可领取的每日赠送积分活动
 
-## 安装为 WorkBuddy Skill
+## 下载
 
 ```bash
-mkdir -p ~/.workbuddy/skills
-cp -R workbuddy-daily-credits ~/.workbuddy/skills/
+git clone https://github.com/95junminhuang/workbuddy-daily-credits.git
+cd workbuddy-daily-credits
 ```
 
-然后可以在 WorkBuddy 中要求“领取今日积分”，或直接运行：
+无需安装 Python 依赖。查询状态：
 
 ```bash
-python3 ~/.workbuddy/skills/workbuddy-daily-credits/scripts/claim_daily_credit.py --claim --json
+python3 scripts/claim_daily_credit.py --status --json
 ```
 
-只查询状态：
+领取今日积分：
 
 ```bash
-python3 ~/.workbuddy/skills/workbuddy-daily-credits/scripts/claim_daily_credit.py --status --json
+python3 scripts/claim_daily_credit.py --claim --json
 ```
 
 ## 每日自动领取
@@ -44,26 +44,28 @@ python3 ~/.workbuddy/skills/workbuddy-daily-credits/scripts/claim_daily_credit.p
 默认每天 `00:30` 执行：
 
 ```bash
-python3 ~/.workbuddy/skills/workbuddy-daily-credits/scripts/install_launch_agent.py
+python3 scripts/install_launch_agent.py
 ```
+
+安装器会把运行文件复制到 `~/.local/share/workbuddy-daily-credits`，然后创建并加载 `~/Library/LaunchAgents/com.workbuddy.daily-credits.plist`。克隆目录可以在安装后删除。
 
 指定时间，例如每天 `08:15`：
 
 ```bash
-python3 ~/.workbuddy/skills/workbuddy-daily-credits/scripts/install_launch_agent.py --hour 8 --minute 15
+python3 scripts/install_launch_agent.py --hour 8 --minute 15
 ```
 
 卸载定时任务：
 
 ```bash
-python3 ~/.workbuddy/skills/workbuddy-daily-credits/scripts/install_launch_agent.py --uninstall
+python3 ~/.local/share/workbuddy-daily-credits/install_launch_agent.py --uninstall
 ```
 
 日志位置：`~/.workbuddy/logs/daily-credits.log`
 
 ## 工作原理与安全边界
 
-脚本在运行时读取 WorkBuddy 已有的本地登录会话，只向 `https://copilot.tencent.com` 发送 WorkBuddy 所需的认证请求。目标域名经过严格校验，防止凭证被发送到其他主机。
+脚本在运行时读取 WorkBuddy 已有的本地登录会话，只向 `https://copilot.tencent.com` 发送 WorkBuddy 所需的认证请求。目标域名经过严格校验，防止凭证被发送到其他主机。WorkBuddy 应用不需要保持运行，但本地登录会话必须仍然有效。
 
 它只实现两种操作：查询每日领取状态，以及领取当前账号的每日赠送积分。不会自动发布内容、邀请用户或完成其他成长任务。
 
