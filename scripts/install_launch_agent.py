@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install or remove a macOS LaunchAgent for zero-model daily claiming."""
+"""Install or remove a standalone macOS LaunchAgent for daily claiming."""
 
 from __future__ import annotations
 
@@ -15,6 +15,9 @@ from pathlib import Path
 LABEL = "com.workbuddy.daily-credits"
 PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 LOG_PATH = Path.home() / ".workbuddy" / "logs" / "daily-credits.log"
+INSTALL_DIR = Path.home() / ".local" / "share" / "workbuddy-daily-credits"
+INSTALLED_CLAIM_SCRIPT = INSTALL_DIR / "claim_daily_credit.py"
+INSTALLED_MANAGER = INSTALL_DIR / "install_launch_agent.py"
 
 
 def launchctl(*args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -38,22 +41,46 @@ def uninstall() -> None:
         PLIST_PATH.unlink()
     except FileNotFoundError:
         pass
-    print(f"REMOVED label={LABEL}")
+    for path in (INSTALLED_CLAIM_SCRIPT, INSTALLED_MANAGER):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    try:
+        INSTALL_DIR.rmdir()
+    except OSError:
+        pass
+    print(f"REMOVED label={LABEL} runtime={INSTALL_DIR}")
+
+
+def install_runtime_file(source: Path, destination: Path) -> None:
+    """Copy one runtime file atomically and make it executable."""
+    if source.resolve() == destination.resolve():
+        os.chmod(destination, 0o755)
+        return
+    temp = destination.with_suffix(destination.suffix + ".tmp")
+    shutil.copyfile(source, temp)
+    os.chmod(temp, 0o755)
+    temp.replace(destination)
 
 
 def install(hour: int, minute: int) -> None:
-    claim_script = Path(__file__).resolve().with_name("claim_daily_credit.py")
-    if not claim_script.is_file():
-        raise SystemExit(f"claim script not found: {claim_script}")
+    manager_source = Path(__file__).resolve()
+    claim_source = manager_source.with_name("claim_daily_credit.py")
+    if not claim_source.is_file():
+        raise SystemExit(f"claim script not found: {claim_source}")
     python = shutil.which("python3") or sys.executable
     if not python:
         raise SystemExit("python3 not found")
 
+    INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+    install_runtime_file(claim_source, INSTALLED_CLAIM_SCRIPT)
+    install_runtime_file(manager_source, INSTALLED_MANAGER)
     PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "Label": LABEL,
-        "ProgramArguments": [python, str(claim_script), "--claim", "--json"],
+        "ProgramArguments": [python, str(INSTALLED_CLAIM_SCRIPT), "--claim", "--json"],
         "StartCalendarInterval": {"Hour": hour, "Minute": minute},
         "ProcessType": "Background",
         "RunAtLoad": False,
@@ -78,7 +105,10 @@ def install(hour: int, minute: int) -> None:
         result = launchctl("load", str(PLIST_PATH), check=False)
     if result.returncode != 0:
         raise SystemExit(f"launchctl failed: {result.stderr.strip()}")
-    print(f"INSTALLED label={LABEL} schedule={hour:02d}:{minute:02d} log={LOG_PATH}")
+    print(
+        f"INSTALLED label={LABEL} schedule={hour:02d}:{minute:02d} "
+        f"runtime={INSTALL_DIR} log={LOG_PATH}"
+    )
 
 
 def parse_args() -> argparse.Namespace:
